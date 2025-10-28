@@ -1,45 +1,60 @@
 pipeline {
     agent any
-
+    
     environment {
-        DOCKER_USER = 'amsaighi'
-        DOCKER_REGISTRY = 'docker.io'
+        DOCKER_IMAGE = "mon-app:${env.BUILD_ID}"
+        DOCKER_CONTAINER = "mon-app-container"
     }
-
+    
     stages {
-        stage('Hello') {
+        stage('Checkout') {
             steps {
-                echo 'message test'
+                checkout scm
             }
         }
         
         stage('Build') {
             steps {
-                sh '''
-                    echo "Docker build"
-                    docker build -t amsaighi/sogral-docker-test-app . 
-                '''
-            }
-        }
-        
-        stage('Login') {
-            steps {
-                withCredentials([string(credentialsId: 'DOCKER_PAT', variable: 'DOCKER_PAT')]) {
-                    sh '''
-                        echo "Docker login"
-                        echo "$DOCKER_PAT" | docker login -u $DOCKER_USER --password-stdin
-                    '''
+                script {
+                    // Construire l'image Docker de l'application
+                    sh "docker build -t ${DOCKER_IMAGE} ."
                 }
             }
         }
         
-        stage('Push') {
+        stage('Test') {
             steps {
-                sh '''
-                    echo "Docker push"
-                    docker push amsaighi/sogral-docker-test-app
-                '''
+                script {
+                    // Exécuter les tests (ajuster selon votre projet)
+                    sh "docker run --rm ${DOCKER_IMAGE} npm test || true"
+                }
             }
+        }
+        
+        stage('Deploy') {
+            steps {
+                script {
+                    // Arrêter et supprimer l'ancien conteneur s'il existe
+                    sh "docker stop ${DOCKER_CONTAINER} || true"
+                    sh "docker rm ${DOCKER_CONTAINER} || true"
+                    
+                    // Démarrer le nouveau conteneur
+                    sh "docker run -d --name ${DOCKER_CONTAINER} -p 3000:3000 ${DOCKER_IMAGE}"
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Nettoyage des images intermédiaires
+            sh "docker system prune -f"
+        }
+        success {
+            echo 'Déploiement réussi!'
+        }
+        failure {
+            echo 'Échec du déploiement!'
         }
     }
 }
