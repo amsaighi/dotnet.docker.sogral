@@ -1,0 +1,60 @@
+﻿pipeline {
+    agent { label 'dotnet' }
+
+    options {
+        timestamps()
+    }
+
+    environment {
+        BUILD_DIR = "build_output"
+        ARTIFACT_NAME = "dotnet_sogral.zip"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "Pulling source code from GitHub..."
+                git url: 'https://github.com/cheikh16/dotnet.docker.sogral.git'
+            }
+        }
+
+        stage('Restore') {
+            steps {
+                bat 'dotnet restore'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                bat 'dotnet build --configuration Release --no-restore'
+            }
+        }
+
+        stage('Publish') {
+            steps {
+                bat "dotnet publish --configuration Release --no-build --output ${BUILD_DIR}"
+            }
+        }
+
+        stage('Package Artifact') {
+            steps {
+                bat "powershell Compress-Archive -Path ${BUILD_DIR}\\* -DestinationPath ${ARTIFACT_NAME} -Force"
+            }
+        }
+
+        stage('Archive Artifact') {
+            steps {
+                archiveArtifacts artifacts: "${ARTIFACT_NAME}", fingerprint: true
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Build and artifact generation completed successfully."
+        }
+        failure {
+            echo "❌ Pipeline failed."
+        }
+    }
+}

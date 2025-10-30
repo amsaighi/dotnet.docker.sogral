@@ -1,0 +1,65 @@
+﻿pipeline {
+    agent none
+
+    options {
+        timestamps()
+    }
+
+    environment {
+        AGENTS = "alger,oran,setif"
+        JENKINS_URL = "http://localhost:8081"
+        CI_JOB_NAME = "Pipline.CI.Build"
+        ARTIFACT_NAME = "dotnet_sogral.zip"
+    }
+
+    stages {
+        stage('Deploy to Agent Workspaces') {
+            steps {
+                script {
+                    def agentList = AGENTS.split(',')
+                    def branches = [:]
+
+                    for (int i = 0; i < agentList.size(); i++) {
+                        def nodeName = agentList[i].trim()
+
+                        branches[nodeName] = {
+                            node(nodeName) {
+                                
+                                stage("${nodeName}") {
+                                    echo "🚀 Deploying artifact on ${nodeName}"
+
+                                    // Get artifacts from CI job
+                                    copyArtifacts(
+                                        projectName: "${env.CI_JOB_NAME}",
+                                        selector: lastSuccessful(),
+                                        filter: "${env.ARTIFACT_NAME}",
+                                        target: "artifacts\\"
+                                    )
+
+                                    // Deploy and extract on Windows
+                                    bat '''
+                                        echo Extracting artifact...
+                                        powershell -Command "Expand-Archive -Path 'artifacts\\dotnet_sogral.zip' -DestinationPath 'deploy' -Force"
+                                        echo Deployment files:
+                                        dir deploy
+                                    '''
+                                }
+                            }
+                        }
+                    }
+
+                    parallel branches
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Deployment completed successfully on all agents."
+        }
+        failure {
+            echo "❌ One or more deployments failed."
+        }
+    }
+}
