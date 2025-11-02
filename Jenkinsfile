@@ -1,25 +1,38 @@
 pipeline {
-     agent {
-        docker {
-            image 'mcr.microsoft.com/dotnet/sdk:8.0'  // Conteneur avec .NET SDK
-            args '-v /var/run/docker.sock:/var/run/docker.sock'  // Pour DooD
-        }
-    }
+    agent any
     
     environment {
-          // ⚙️ CONFIGURATION - À ADAPTER À VOTRE PROJET
-        DOCKER_REGISTRY = ''  // Laissez vide pour Docker local
-        IMAGE_NAME = 'mon-api-dotnet'  // Remplacez par le nom de votre app
-        DOCKER_HOST = 'unix:///var/run/docker.sock'
-        CONTAINER_NAME = 'mon-api-container'  // Nom du conteneur
-        APP_PORT = '5000'  // Port d'exposition
-        // 🎯 FIN DE CONFIGURATION
+        DOCKER_REGISTRY = ''
+        IMAGE_NAME = 'mon-api-dotnet'
+        CONTAINER_NAME = 'mon-api-container'
+        APP_PORT = '5000'
     }
     
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+        
+        stage('Setup .NET') {
+            steps {
+                script {
+                    // Vérifier si .NET est installé sur le node Jenkins
+                    sh '''
+                        if ! command -v dotnet &> /dev/null; then
+                            echo ".NET not found, installing..."
+                            # Installation de .NET pour Linux
+                            wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
+                            chmod +x dotnet-install.sh
+                            ./dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet
+                            ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet
+                        else
+                            echo ".NET is already installed"
+                            dotnet --version
+                        fi
+                    '''
+                }
             }
         }
         
@@ -50,7 +63,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${IMAGE_NAME}:${env.BUILD_ID}")
+                    sh "docker build -t ${IMAGE_NAME}:${env.BUILD_ID} ."
                 }
             }
         }
@@ -59,13 +72,11 @@ pipeline {
             steps {
                 script {
                     // Arrêter et supprimer le conteneur existant s'il existe
-                    sh 'docker stop ${IMAGE_NAME} || true'
-                    sh 'docker rm ${IMAGE_NAME} || true'
+                    sh "docker stop ${CONTAINER_NAME} || true"
+                    sh "docker rm ${CONTAINER_NAME} || true"
                     
                     // Lancer le nouveau conteneur
-                    docker.image("${IMAGE_NAME}:${env.BUILD_ID}").run(
-                        "--name ${IMAGE_NAME} -p 8080:80 -d"
-                    )
+                    sh "docker run -d --name ${CONTAINER_NAME} -p ${APP_PORT}:5000 ${IMAGE_NAME}:${env.BUILD_ID}"
                 }
             }
         }
@@ -78,6 +89,7 @@ pipeline {
         }
         success {
             echo 'Deployment successful!'
+            sh "echo 'Application disponible sur http://localhost:${APP_PORT}'"
         }
         failure {
             echo 'Deployment failed!'
