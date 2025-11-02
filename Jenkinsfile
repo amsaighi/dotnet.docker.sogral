@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+     agent {
+        docker {
+            image 'mcr.microsoft.com/dotnet/sdk:8.0'  // Conteneur avec .NET SDK
+            args '-v /var/run/docker.sock:/var/run/docker.sock'  // Pour DooD
+        }
+    }
     
     environment {
           // ⚙️ CONFIGURATION - À ADAPTER À VOTRE PROJET
