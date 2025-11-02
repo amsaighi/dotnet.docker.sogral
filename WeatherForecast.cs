@@ -10,6 +10,7 @@ namespace dotnet.docker
 
         public string? Summary { get; set; }
         //public string? Summary { get; set; }
+        //public string? Summary { get; set; }
      
     }
 }
